@@ -19,7 +19,7 @@ fn main() {
             Ok(mut s) => {
                 println!("accepted new connection");
                 let ok_response = "HTTP/1.1 200 OK\r\n\r\n";
-                let not_found_response = "HTTP/1.1 404 Not Foudn\r\n\r\n";
+                let not_found_response = "HTTP/1.1 404 Not Found\r\n\r\n";
                 let buf: &mut[u8] = &mut [0; 1024];
                 s.read(buf).unwrap();
                 let buf_vec: Vec<u8> = buf.to_vec();
