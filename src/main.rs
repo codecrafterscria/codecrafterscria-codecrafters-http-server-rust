@@ -1,7 +1,7 @@
 // Uncomment this block to pass the first stage
 use std::{
     collections::HashMap,
-    fs,
+    fs::{self},
     io::{Read, Write},
     net::{TcpListener, TcpStream},
     thread,
@@ -51,32 +51,48 @@ fn handle_connection(mut s: TcpStream) {
     let req = parse_request(str_req);
     println!("method: {}", req.method);
     println!("path: {}", req.path);
-    if req.path == "/" {
-        s.write(ok_response.as_bytes()).unwrap();
-    } else if req.path.starts_with("/echo/") {
-        let echo = extract_suffix(req.path, "/echo/");
-        let res = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-            echo.len(),
-            echo
-        );
-        s.write(res.as_bytes()).unwrap();
-    } else if req.path == "/user-agent" {
-        let value = req.headers.get("user-agent").unwrap();
-        s.write(build_response(value.into(), "text/plain").as_bytes()).unwrap();
-    } else if req.path.starts_with("/files/") {
-        let directory = parse_dir();
-        let file = extract_suffix(req.path, "/files/");
-        let path = format!("{}/{}", directory, file);
-        match fs::read_to_string(path) {
-          Ok(f) => {
-            s.write(build_response(f, "application/octet-stream").as_bytes()).unwrap();
-          }
-          Err(e) => {
-            print!("error: {}", e);
+    if req.method == "GET" {
+        if req.path == "/" {
+            s.write(ok_response.as_bytes()).unwrap();
+        } else if req.path.starts_with("/echo/") {
+            let echo = extract_suffix(req.path, "/echo/");
+            let res = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                echo.len(),
+                echo
+            );
+            s.write(res.as_bytes()).unwrap();
+        } else if req.path == "/user-agent" {
+            let value = req.headers.get("user-agent").unwrap();
+            s.write(build_response(value.into(), "text/plain").as_bytes())
+                .unwrap();
+        } else if req.path.starts_with("/files/") {
+            let directory = parse_dir();
+            let file = extract_suffix(req.path, "/files/");
+            let path = format!("{}/{}", directory, file);
+            match fs::read_to_string(path) {
+                Ok(f) => {
+                    s.write(build_response(f, "application/octet-stream").as_bytes())
+                        .unwrap();
+                }
+                Err(e) => {
+                    print!("error: {}", e);
+                    s.write(not_found_response.as_bytes()).unwrap();
+                }
+            }
+        } else {
             s.write(not_found_response.as_bytes()).unwrap();
-          }
         }
+    } else if req.method == "POST" {
+      if req.path.starts_with("/files/") {
+          let directory = parse_dir();
+          let file_name = extract_suffix(req.path, "/files/");
+          let path = format!("{}/{}", directory, file_name);
+          fs::write(path, req.body.trim_end_matches(char::from(0))).unwrap();
+          s.write("HTTP/1.1 201 Created\r\n\r\n".as_bytes()).unwrap();
+      } else {
+        s.write(not_found_response.as_bytes()).unwrap();
+      }
     } else {
         s.write(not_found_response.as_bytes()).unwrap();
     }
@@ -124,6 +140,6 @@ fn parse_request(request: String) -> Request {
         method,
         path,
         headers,
-        body: body,
+        body,
     }
 }
