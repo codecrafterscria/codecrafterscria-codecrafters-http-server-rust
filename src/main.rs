@@ -1,9 +1,11 @@
 // Uncomment this block to pass the first stage
-use std::{io::{Read, Write}, net::{TcpListener}};
+use std::{collections::HashMap, io::{Read, Write}, net::TcpListener};
 
 struct Request {
     pub method: String,
     pub path: String,
+    pub headers: HashMap<String, String>,
+    pub body: String,
 }
 
 fn main() {
@@ -34,6 +36,11 @@ fn main() {
                   let echo = extract_echo(req.path);
                   let res = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", echo.len(), echo);
                   s.write(res.as_bytes()).unwrap();
+                } else if req.path == "/user-agent" {
+                  let value = req.headers.get("user-agent").unwrap();
+                  let res = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", value.len(), value);
+                  println!("res: {}", res);
+                  s.write(res.as_bytes()).unwrap();
                 } else {
                   s.write(not_found_response.as_bytes()).unwrap();
                 }
@@ -51,11 +58,28 @@ fn extract_echo(path:String) -> String {
 }
 
 fn parse_request(request: String) -> Request {
-  println!("rr: {}", request);
-  let method_path_version = request.split("\r\n").next().unwrap();
-  let mut method_path_iter = method_path_version.split(" ");
-  let method = method_path_iter.next().unwrap().into();
-  println!("m: {}", method);
-  let path = method_path_iter.next().unwrap().into();
-  Request{ method, path }
+  let mut req_split = request.split("\r\n\r\n");
+  let path_headers = req_split.next().unwrap();
+  let body = req_split.next().unwrap().into();
+
+  let mut path_headers_split = path_headers.split("\r\n");
+  let method_path = path_headers_split.next().unwrap();
+  let mut method_path_split = method_path.split(" ");
+
+  let method = method_path_split.next().unwrap().into();
+  let path = method_path_split.next().unwrap().into();
+
+  let mut headers: HashMap<String, String> = HashMap::new();
+
+  for header in path_headers_split {
+    let mut header_iter = header.split(": ");
+    let key = header_iter.next().unwrap().to_lowercase();
+    let value = header_iter.next().unwrap().to_lowercase();
+    println!("header: {}", header);
+    println!("key: {}", key);
+    println!("value: {}", value);
+    headers.insert(String::from(key), String::from(value));
+  }
+
+  Request{ method, path, headers, body: body }
 }
