@@ -1,5 +1,5 @@
 // Uncomment this block to pass the first stage
-use std::{collections::HashMap, io::{Read, Write}, net::TcpListener};
+use std::{collections::HashMap, io::{Read, Write}, net::{TcpListener, TcpStream}, thread};
 
 struct Request {
     pub method: String,
@@ -18,38 +18,42 @@ fn main() {
 
     for stream in listener.incoming() {
         match stream {
-            Ok(mut s) => {
-                println!("accepted new connection");
-                let ok_response = "HTTP/1.1 200 OK\r\n\r\n";
-                let not_found_response = "HTTP/1.1 404 Not Found\r\n\r\n";
-                let buf: &mut[u8] = &mut [0; 1024];
-                s.read(buf).unwrap();
-                let buf_vec: Vec<u8> = buf.to_vec();
-                let str_req = String::from_utf8_lossy(&buf_vec).to_string();
-                println!("str req: {}", str_req);
-                let req = parse_request(str_req);
-                println!("method: {}", req.method);
-                println!("path: {}", req.path);
-                if req.path == "/" {
-                  s.write(ok_response.as_bytes()).unwrap();
-                }  else if req.path.starts_with("/echo/") {
-                  let echo = extract_echo(req.path);
-                  let res = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", echo.len(), echo);
-                  s.write(res.as_bytes()).unwrap();
-                } else if req.path == "/user-agent" {
-                  let value = req.headers.get("user-agent").unwrap();
-                  let res = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", value.len(), value);
-                  println!("res: {}", res);
-                  s.write(res.as_bytes()).unwrap();
-                } else {
-                  s.write(not_found_response.as_bytes()).unwrap();
-                }
+            Ok(s) => {
+              thread::spawn(|| handle_connection(s));
             }
             Err(e) => {
                 println!("error: {}", e);
             }
         }
     }
+}
+
+fn handle_connection(mut s: TcpStream) {
+  println!("accepted new connection");
+  let ok_response = "HTTP/1.1 200 OK\r\n\r\n";
+  let not_found_response = "HTTP/1.1 404 Not Found\r\n\r\n";
+  let buf: &mut[u8] = &mut [0; 1024];
+  s.read(buf).unwrap();
+  let buf_vec: Vec<u8> = buf.to_vec();
+  let str_req = String::from_utf8_lossy(&buf_vec).to_string();
+  println!("str req: {}", str_req);
+  let req = parse_request(str_req);
+  println!("method: {}", req.method);
+  println!("path: {}", req.path);
+  if req.path == "/" {
+  s.write(ok_response.as_bytes()).unwrap();
+  }  else if req.path.starts_with("/echo/") {
+  let echo = extract_echo(req.path);
+  let res = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", echo.len(), echo);
+  s.write(res.as_bytes()).unwrap();
+  } else if req.path == "/user-agent" {
+  let value = req.headers.get("user-agent").unwrap();
+  let res = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", value.len(), value);
+  println!("res: {}", res);
+  s.write(res.as_bytes()).unwrap();
+  } else {
+  s.write(not_found_response.as_bytes()).unwrap();
+  }
 }
 
 fn extract_echo(path:String) -> String {
