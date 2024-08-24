@@ -1,5 +1,5 @@
 // Uncomment this block to pass the first stage
-use std::{io::{Read, Write}, net::TcpListener};
+use std::{io::{Read, Write}, net::{TcpListener}};
 
 struct Request {
     pub method: String,
@@ -28,13 +28,14 @@ fn main() {
                 let req = parse_request(str_req);
                 println!("method: {}", req.method);
                 println!("path: {}", req.path);
-                match req.path.as_str() {
-                    "/" => {
-                      s.write(ok_response.as_bytes()).unwrap();
-                    }
-                    _ => {
-                      s.write(not_found_response.as_bytes()).unwrap();
-                    }
+                if req.path == "/" {
+                  s.write(ok_response.as_bytes()).unwrap();
+                }  else if req.path.starts_with("/echo/") {
+                  let echo = extract_echo(req.path);
+                  let res = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", echo.len(), echo);
+                  s.write(res.as_bytes()).unwrap();
+                } else {
+                  s.write(not_found_response.as_bytes()).unwrap();
                 }
             }
             Err(e) => {
@@ -42,6 +43,11 @@ fn main() {
             }
         }
     }
+}
+
+fn extract_echo(path:String) -> String {
+  let echo = path.strip_prefix("/echo/").unwrap();
+  return echo.into();
 }
 
 fn parse_request(request: String) -> Request {
