@@ -1,10 +1,6 @@
 // Uncomment this block to pass the first stage
 use std::{
-    collections::HashMap,
-    fs::{self},
-    io::{Read, Write},
-    net::{TcpListener, TcpStream},
-    thread,
+   collections::HashMap, fs, io::{Read, Write}, net::{TcpListener, TcpStream}, thread
 };
 
 struct Request {
@@ -56,15 +52,14 @@ fn handle_connection(mut s: TcpStream) {
             s.write(ok_response.as_bytes()).unwrap();
         } else if req.path.starts_with("/echo/") {
             let echo = extract_suffix(req.path, "/echo/");
-            let res = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-                echo.len(),
-                echo
-            );
-            s.write(res.as_bytes()).unwrap();
+            let mut headers = vec!["Content-Type: text/plain"];
+            if req.headers.get("accept-encoding").unwrap_or(&String::from("")) == "gzip" {
+                headers.push("Content-Encoding: gzip");
+            }
+            s.write(build_response("200 OK", &headers, echo.as_str()).as_bytes()).unwrap();
         } else if req.path == "/user-agent" {
             let value = req.headers.get("user-agent").unwrap();
-            s.write(build_response(value.into(), "text/plain").as_bytes())
+            s.write(build_response("200 OK" , &vec!["Content-Type: text/plain"], value).as_bytes())
                 .unwrap();
         } else if req.path.starts_with("/files/") {
             let directory = parse_dir();
@@ -72,7 +67,7 @@ fn handle_connection(mut s: TcpStream) {
             let path = format!("{}/{}", directory, file);
             match fs::read_to_string(path) {
                 Ok(f) => {
-                    s.write(build_response(f, "application/octet-stream").as_bytes())
+                    s.write(build_response("200 OK" , &vec!["Content-Type: application/octet-stream"], f.as_str()).as_bytes())
                         .unwrap();
                 }
                 Err(e) => {
@@ -89,7 +84,7 @@ fn handle_connection(mut s: TcpStream) {
           let file_name = extract_suffix(req.path, "/files/");
           let path = format!("{}/{}", directory, file_name);
           fs::write(path, req.body.trim_end_matches(char::from(0))).unwrap();
-          s.write("HTTP/1.1 201 Created\r\n\r\n".as_bytes()).unwrap();
+          s.write(build_response("201 Created", &vec![], "").as_bytes()).unwrap();
       } else {
         s.write(not_found_response.as_bytes()).unwrap();
       }
@@ -98,13 +93,22 @@ fn handle_connection(mut s: TcpStream) {
     }
 }
 
-fn build_response(value: String, content_type: &str) -> String {
-    format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
-        content_type,
-        value.len(),
-        value
-    )
+fn build_response(status: &str, headers: &Vec<&str>, body: &str) -> String {
+    let mut response = format!( "HTTP/1.1 {}\r\n", status).to_owned();
+
+
+    for header in headers.into_iter() {
+        response.push_str(header);
+        response.push_str("\r\n");
+    }
+
+    if body.len() > 0 {
+        response.push_str(format!("Content-Length: {}\r\n\r\n{}", body.len(), body).as_str());
+    } else {
+        response.push_str("\r\n")
+    }
+
+    response
 }
 
 fn extract_suffix(str: String, prefix: &str) -> String {
