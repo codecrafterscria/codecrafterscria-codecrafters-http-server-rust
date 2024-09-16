@@ -53,7 +53,7 @@ fn handle_connection(mut s: TcpStream) {
         } else if req.path.starts_with("/echo/") {
             let echo = extract_suffix(req.path, "/echo/");
             let mut headers = vec!["Content-Type: text/plain"];
-            if req.headers.get("accept-encoding").unwrap_or(&String::from("")) == "gzip" {
+            if req.headers.get("accept-encoding").unwrap_or(&String::from("")).contains("gzip") {
                 headers.push("Content-Encoding: gzip");
             }
             s.write(build_response("200 OK", &headers, echo.as_str()).as_bytes()).unwrap();
